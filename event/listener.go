@@ -1,3 +1,3 @@
 package event
 
-type Listener func(event Event, eventName string)
+type Listener func(e Event, eventName string)

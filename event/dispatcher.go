@@ -1,6 +1,7 @@
 package event
 
 import (
+	"reflect"
 	"sort"
 	"sync"
 )
@@ -12,7 +13,7 @@ const (
 )
 
 type dispatcher struct {
-	mux       sync.Mutex
+	mux       sync.RWMutex
 	listeners map[string][]*listenerWrapper
 }
 
@@ -43,9 +44,9 @@ func (s *listenerSorter) Len() int {
 	return len(s.listeners)
 }
 
-func (d *dispatcher) Dispatch(eventName string, event Event) {
+func (d *dispatcher) Dispatch(eventName string, e Event) {
 	for _, listener := range d.SortedListeners(eventName) {
-		listener.listener(event, eventName)
+		listener.listener(e, eventName)
 	}
 }
 
@@ -58,10 +59,22 @@ func (d *dispatcher) AddListener(eventName string, l Listener, priority int) {
 	})
 }
 
-func (d *dispatcher) RemoveListener(eventName string, listener Listener) {
+func (d *dispatcher) RemoveListener(eventName string, l Listener) {
 	d.mux.Lock()
 	defer d.mux.Unlock()
-	delete(d.listeners, eventName)
+	index := -1
+	listeners := d.listeners[eventName]
+	for i, l2 := range listeners {
+		if reflect.ValueOf(l2.listener).Pointer() == reflect.ValueOf(l).Pointer() {
+			index = i
+			break
+		}
+	}
+	if index == -1 {
+		return
+	}
+	listeners[index] = listeners[len(listeners)-1]
+	d.listeners[eventName] = listeners[:len(listeners)-1]
 }
 
 func (d *dispatcher) SortedListeners(eventName string) []*listenerWrapper {
@@ -73,21 +86,21 @@ func (d *dispatcher) SortedListeners(eventName string) []*listenerWrapper {
 }
 
 func (d *dispatcher) HasListeners(eventName string) bool {
-	d.mux.Lock()
-	defer d.mux.Unlock()
+	d.mux.RLock()
+	defer d.mux.RUnlock()
 	return len(d.listeners[eventName]) > 0
 }
 
-func (d *dispatcher) AddSubscriber(subscriber Subscriber) {
-	for eventName, listeners := range subscriber.SubscribedEvent() {
+func (d *dispatcher) AddSubscriber(s Subscriber) {
+	for eventName, listeners := range s.SubscribedEvent() {
 		for _, listener := range listeners {
 			d.AddListener(eventName, listener, PriorityDefault)
 		}
 	}
 }
 
-func (d *dispatcher) RemoveSubscriber(subscriber Subscriber) {
-	for eventName, listeners := range subscriber.SubscribedEvent() {
+func (d *dispatcher) RemoveSubscriber(s Subscriber) {
+	for eventName, listeners := range s.SubscribedEvent() {
 		for _, listener := range listeners {
 			d.RemoveListener(eventName, listener)
 		}

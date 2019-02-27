@@ -48,9 +48,11 @@ func main() {
 
 	d.AddSubscriber(&s)
 
-	d.AddListener(UserCreated, func(event event.Event, eventName string) {
+	l := func(event event.Event, eventName string) {
 		fmt.Printf("event: %v\tname: %v\t\n", event, eventName)
-	}, event.PriorityHigh)
+	}
+
+	d.AddListener(UserCreated, l, event.PriorityHigh)
 
 	d.Dispatch(UserCreated, evt)
 }
